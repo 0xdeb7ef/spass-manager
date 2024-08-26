@@ -27,7 +27,7 @@ What we end up with is a hastily written program that can only decrypt .spass fi
 Simple, really. Just had a look at what the app does internally. Turns out, it was just AES, it's always AES.
 
 ## What?
-.spass files are just a custom .csv file with semicolons as delimiters, encrypted with AES.
+A .spass file is just a custom .csv file with semicolons as delimiters, encrypted with AES.
 
 The first line appears to indicate the file format version.
 
