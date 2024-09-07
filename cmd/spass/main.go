@@ -3,10 +3,15 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"encoding/base64"
+	"encoding/csv"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
+	"slices"
+	"strings"
 )
 
 func errorPrint(err error) {
@@ -20,6 +25,7 @@ func main() {
 
 	password := decryptCmd.String("password", "", "the password used to encrypt the .spass file [required]")
 	file := decryptCmd.String("file", "", "the .spass file to decrypt [required]")
+	format := decryptCmd.String("format", "", "format to output in, available formats: chrome")
 
 	cmds := []*flag.FlagSet{decryptCmd, encryptCmd}
 	cmds_desc := []string{"decrypt .spass files", "encrypt valid .spass files (not implemented)"}
@@ -49,13 +55,13 @@ func main() {
 	switch os.Args[1] {
 	case "decrypt":
 		decryptCmd.Parse(os.Args[2:])
-
-		if *file == "" || *password == "" {
+		data, err := processDecrypt(file, password, format)
+		if err != nil {
 			decryptCmd.Usage()
-			os.Exit(1)
-		} else {
-			processDecrypt(file, password)
+			fmt.Fprintf(decryptCmd.Output(), "\nError: %s\n", err.Error())
+			os.Exit(0)
 		}
+		fmt.Println(string(data))
 
 	case "encrypt":
 		encryptCmd.Parse(os.Args[2:])
@@ -69,7 +75,36 @@ func main() {
 	}
 }
 
-func processDecrypt(file, password *string) {
+type Format int
+
+const (
+	None Format = iota
+	Chrome
+)
+
+var (
+	formatMap = map[string]Format{
+		"":       None,
+		"chrome": Chrome,
+	}
+)
+
+func ParseFormat(str string) (Format, bool) {
+	c, ok := formatMap[strings.ToLower(str)]
+	return c, ok
+}
+
+func processDecrypt(file, password, format *string) ([]byte, error) {
+	if *file == "" || *password == "" {
+		return nil, errors.New("both -file and -password are required")
+	}
+
+	// format processor
+	f, ok := ParseFormat(*format)
+	if !ok {
+		return nil, errors.New("invalid format, only supports: chrome")
+	}
+
 	data_b64, err := os.ReadFile(*file)
 	if err != nil {
 		errorPrint(err)
@@ -97,5 +132,68 @@ func processDecrypt(file, password *string) {
 		}
 	}
 
-	fmt.Print(string(data))
+	switch f {
+	case Chrome:
+		data, err = parseChrome(data)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return data, nil
+}
+
+func parseChrome(data []byte) ([]byte, error) {
+	s := strings.Split(string(data), "next_table")
+
+	r := csv.NewReader(strings.NewReader(s[1]))
+	r.Comma = ';'
+	r.FieldsPerRecord = 33
+
+	_, err := r.Read()
+	if err != nil {
+		return nil, err
+	}
+
+	// Chrome only needs these headers
+	header := []string{"url", "username", "password"}
+
+	var final [][]string
+	final = append(final, header)
+
+	for {
+		record, err := r.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		var rec []string
+		// We only need url, username, and password (1, 4, 7) respectively
+		cols_needed := []int{1, 4, 7}
+		for i, rr := range record {
+			if slices.Contains(cols_needed, i) {
+
+				b, err := base64.StdEncoding.DecodeString(rr)
+				if err != nil {
+					return nil, err
+				}
+
+				rec = append(rec, string(b))
+			}
+		}
+
+		final = append(final, rec)
+	}
+
+	var buff bytes.Buffer
+
+	w := csv.NewWriter(&buff)
+
+	w.WriteAll(final)
+	w.Flush()
+
+	return buff.Bytes(), nil
 }
