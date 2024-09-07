@@ -155,8 +155,7 @@ func parseChrome(data []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	// Chrome only needs these headers
-	header := []string{"url", "username", "password"}
+	header := []string{"url", "username", "password", "name", "note"}
 
 	var final [][]string
 	final = append(final, header)
@@ -171,8 +170,7 @@ func parseChrome(data []byte) ([]byte, error) {
 		}
 
 		var rec []string
-		// We only need url, username, and password (1, 4, 7) respectively
-		cols_needed := []int{1, 4, 7}
+		cols_needed := []int{1, 4, 7, 17, 31}
 		for i, rr := range record {
 			if slices.Contains(cols_needed, i) {
 

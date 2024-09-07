@@ -15,8 +15,10 @@ Congratulations, you are now the owner of a brand new `spass` binary!
 You can simply call `spass` and it will print the usage.
 
 ```console
-$ spass decrypt -file super_secret_password_file.spass -password 'SuperSecretPassword' > passwords.csv
+$ spass decrypt -file super_secret_password_file.spass -password 'SuperSecretPassword' -format chrome > passwords.csv
 ```
+
+The above example decrypts and writes your exported passwords into passwords.csv that Chrome can happily read.
 
 ## Why?
 I was looking for a way to move my passwords to and from Samsung Pass, but could not find anything online. Everywhere I looked, it said that Samsung uses a custom format.
