@@ -310,9 +310,11 @@ func processEncrypt(file, password *string) ([]byte, error) {
 		for i := range header {
 			for r := range index_matcher {
 				if index_matcher[r].ind_2 == i {
-					rec = append(rec, record[index_matcher[r].ind_1])
+					data := record[index_matcher[r].ind_1]
+					rec = append(rec, base64.StdEncoding.EncodeToString([]byte(data)))
 				} else {
-					rec = append(rec, "")
+					data := ""
+					rec = append(rec, base64.StdEncoding.EncodeToString([]byte(data)))
 				}
 			}
 		}
