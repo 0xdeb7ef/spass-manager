@@ -1,197 +1,93 @@
 package main
 
 import (
-	"bufio"
-	"bytes"
-	"encoding/base64"
-	"encoding/csv"
-	"errors"
-	"flag"
 	"fmt"
-	"io"
 	"os"
 	"slices"
 	"strings"
+
+	"github.com/spf13/cobra"
 )
 
-func errorPrint(err error) {
-	fmt.Fprintf(os.Stderr, "error: %s\n", err.Error())
+var password string
+var file string
+var format string
+
+func init() {
+	decryptCmd.Flags().StringVarP(&file, "file", "f", "", "the .spass file to decrypt [required]")
+	decryptCmd.Flags().StringVarP(&password, "password", "p", "", "the password to decrypt the .spass file [required]")
+	decryptCmd.Flags().StringVarP(&format, "format", "t", "", "the format of the .spass file. available formats: \"chrome\" [required]")
+	decryptCmd.MarkFlagRequired("file")
+	decryptCmd.MarkFlagRequired("password")
+	decryptCmd.MarkFlagRequired("format")
+
+	encryptCmd.Flags().StringVarP(&file, "file", "f", "", "the .spass file to encrypt [required]")
+	encryptCmd.Flags().StringVarP(&password, "password", "p", "", "the password to encrypt the .spass file [required]")
+	encryptCmd.MarkFlagRequired("file")
+	encryptCmd.MarkFlagRequired("password")
+
+	rootCmd.AddCommand(encryptCmd, decryptCmd)
+}
+
+var encryptCmd = &cobra.Command{
+	Use:   "encrypt [-f file] [-p password]",
+	Short: "Encrypt .csv password-file to .spass encrypted password-file",
+	Long: `Options:
+			-f, -file string       the .spass file to encrypt [required]
+			-p, -password string   the password to encrypt the .spass file [required]	
+	`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		// fmt.Println("encrypt succesfful spass is a password manager")
+		data, err := processEncrypt(&file, &password)
+		if err != nil {
+			return fmt.Errorf(err.Error())
+		}
+		if slices.Contains(os.Args, ">") {
+			fmt.Println(string(data))
+		} else {
+			err = os.WriteFile(file+".spass", data, 0644)
+			if err != nil {
+				return fmt.Errorf(err.Error())
+			}
+			fmt.Printf("Successfully created .spass file: %s.spass", file)
+		}
+		return nil
+	},
+}
+
+var decryptCmd = &cobra.Command{
+	Use:   "decrypt [-f file] [-p password] [-t format]",
+	Short: "Decrypt .spass encrypted password-file to .csv password-file",
+	Long: `Options
+	-f, -file string       the .spass file to decrypt [required]
+	-p, -password string   the password to decrypt the .spass file [required]
+	-t, -format string   the format of the .spass file. available formats: chrome [required]
+	`,
+	Example: `
+	# Decrypt .spass file
+	spass decrypt -file super_secret_password_file.spass -password 'SuperSecretPassword' -format chrome > passwords.csv
+	`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if strings.ToLower(format) != "chrome" {
+			return fmt.Errorf("invalid format, only supports: chrome")
+		}
+		// fmt.Println("descrypt succesfful spass is a password manager")
+		data, err := processDecrypt(&file, &password, &format)
+		if err != nil {
+			return fmt.Errorf(err.Error())
+		}
+		fmt.Println(string(data))
+		return nil
+	},
+}
+
+var rootCmd = &cobra.Command{
+	Use:   "spass",
+	Short: "decrypt from and encrypt to a .spass password file",
 }
 
 func main() {
-	// Flag setup
-	decryptCmd := flag.NewFlagSet("decrypt", flag.ExitOnError)
-	encryptCmd := flag.NewFlagSet("encrypt", flag.ExitOnError)
-
-	password := decryptCmd.String("password", "", "the password used to encrypt the .spass file [required]")
-	file := decryptCmd.String("file", "", "the .spass file to decrypt [required]")
-	format := decryptCmd.String("format", "", "format to output in, available formats: chrome")
-
-	cmds := []*flag.FlagSet{decryptCmd, encryptCmd}
-	cmds_desc := []string{"decrypt .spass files", "encrypt valid .spass files (not implemented)"}
-
-	for _, c := range cmds {
-		c.Usage = func() {
-			fmt.Fprintf(c.Output(), "Usage of %s %s:\n\n", os.Args[0], c.Name())
-			c.PrintDefaults()
-		}
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Println(err)
 	}
-
-	flag.Usage = func() {
-		w := flag.CommandLine.Output()
-		fmt.Fprintf(w, "Usage of %s:\n\n", os.Args[0])
-
-		for i, c := range cmds {
-			fmt.Fprintf(w, "  %s\t%s\n", c.Name(), cmds_desc[i])
-		}
-	}
-
-	// Usage handling
-	if len(os.Args) < 2 {
-		flag.Usage()
-		os.Exit(0)
-	}
-
-	switch os.Args[1] {
-	case "decrypt":
-		decryptCmd.Parse(os.Args[2:])
-		data, err := processDecrypt(file, password, format)
-		if err != nil {
-			decryptCmd.Usage()
-			fmt.Fprintf(decryptCmd.Output(), "\nError: %s\n", err.Error())
-			os.Exit(0)
-		}
-		fmt.Println(string(data))
-
-	case "encrypt":
-		encryptCmd.Parse(os.Args[2:])
-		encryptCmd.Usage()
-		os.Exit(0)
-
-	default:
-		flag.Usage()
-		fmt.Fprintf(flag.CommandLine.Output(), "\nno such subcommand %s\n", os.Args[1])
-		os.Exit(1)
-	}
-}
-
-type Format int
-
-const (
-	None Format = iota
-	Chrome
-)
-
-var (
-	formatMap = map[string]Format{
-		"":       None,
-		"chrome": Chrome,
-	}
-)
-
-func ParseFormat(str string) (Format, bool) {
-	c, ok := formatMap[strings.ToLower(str)]
-	return c, ok
-}
-
-func processDecrypt(file, password, format *string) ([]byte, error) {
-	if *file == "" || *password == "" {
-		return nil, errors.New("both -file and -password are required")
-	}
-
-	// format processor
-	f, ok := ParseFormat(*format)
-	if !ok {
-		return nil, errors.New("invalid format, only supports: chrome")
-	}
-
-	data_b64, err := os.ReadFile(*file)
-	if err != nil {
-		errorPrint(err)
-		os.Exit(1)
-	}
-
-	data, err := Decrypt(data_b64, *password)
-	if err != nil {
-		errorPrint(err)
-		os.Exit(1)
-	}
-
-	// Check that the data is valid
-	line := 0
-	scanner := bufio.NewScanner(bytes.NewReader(data))
-	for scanner.Scan() {
-		line++
-		if line == 3 {
-			if scanner.Text() == "next_table" {
-				break
-			} else {
-				errorPrint(errors.New("invalid password/data"))
-				os.Exit(1)
-			}
-		}
-	}
-
-	switch f {
-	case Chrome:
-		data, err = parseChrome(data)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return data, nil
-}
-
-func parseChrome(data []byte) ([]byte, error) {
-	s := strings.Split(string(data), "next_table")
-
-	r := csv.NewReader(strings.NewReader(s[1]))
-	r.Comma = ';'
-	r.FieldsPerRecord = 33
-
-	_, err := r.Read()
-	if err != nil {
-		return nil, err
-	}
-
-	header := []string{"url", "username", "password", "name", "note"}
-
-	var final [][]string
-	final = append(final, header)
-
-	for {
-		record, err := r.Read()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return nil, err
-		}
-
-		var rec []string
-		cols_needed := []int{1, 4, 7, 17, 31}
-		for i, rr := range record {
-			if slices.Contains(cols_needed, i) {
-
-				b, err := base64.StdEncoding.DecodeString(rr)
-				if err != nil {
-					return nil, err
-				}
-
-				rec = append(rec, string(b))
-			}
-		}
-
-		final = append(final, rec)
-	}
-
-	var buff bytes.Buffer
-
-	w := csv.NewWriter(&buff)
-
-	w.WriteAll(final)
-	w.Flush()
-
-	return buff.Bytes(), nil
 }
