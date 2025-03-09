@@ -205,6 +205,10 @@ func processEncrypt(file, password *string) ([]byte, error) {
 
 	// parsing plaintext data
 	file_to_enc, err := os.ReadFile(*file)
+	if err != nil {
+		return nil, err
+
+	}
 	reader := csv.NewReader(strings.NewReader(string(file_to_enc)))
 	reader.Comma = ','
 
