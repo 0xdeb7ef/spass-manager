@@ -75,3 +75,13 @@ The third line, I have no idea, this is a new addition (since version 25 of the 
 The fourth line should say `next_table` and this specific keyword is used to delimit the different data types (passwords, cards, addresses, notes).
 
 The lines following `next_table` are the actual data. The headers are in plain text, but the data itself is base64 encoded.
+
+## TODO
+- [ ] Rewrite `spass_model.go`:
+  - [ ] Use struct field tags, perhaps
+  - [ ] Redo the types
+  - [ ] Rewrite the `parseGeneric` function: 
+    - [ ] Handle more types
+    - [ ] Ignore missing fields, should future-proof the library
+
+- [ ] Add more output formats (`decrypt.go`)
