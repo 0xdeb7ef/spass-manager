@@ -41,6 +41,8 @@ type Password struct {
 	Reserved_8          string
 	Credential_Memo     string
 	OTP                 string
+	Root_ID             string
+	Parent_ID           string
 }
 
 type Card struct {
@@ -57,6 +59,7 @@ type Card struct {
 	Reserved_4            string
 	Reserved_5            string
 	Reserved_6            string
+	Is_Encrypted          string
 }
 
 type Address struct {
@@ -94,7 +97,7 @@ type SPASS struct {
 
 func parseGeneric(data []string, v any) error {
 	rv := reflect.ValueOf(v)
-	if rv.Kind() != reflect.Ptr || rv.IsNil() {
+	if rv.Kind() != reflect.Pointer || rv.IsNil() {
 		return errors.New("v must be a non-nil pointer")
 	}
 

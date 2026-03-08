@@ -42,16 +42,6 @@ func (spass *SPASS) Deserialize(data []byte) error {
 				}
 			}
 		}
-
-		// This check is not really needed, so I'm commenting it out in case future
-		// formats add more lines to the header like what happened in version 25.
-		// if line == 4 {
-		// 	if scanner.Text() == "next_table" {
-		// 		break
-		// 	} else {
-		// 		return errors.New("invalid/malformed data")
-		// 	}
-		// }
 	}
 
 	s := strings.Split(string(data), "next_table")
