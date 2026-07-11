@@ -48,6 +48,7 @@ type Password struct {
 type Card struct {
 	ID                    uint
 	Card_Number_Encrypted string
+	Card_Security_Code    string
 	First_Six_Digit       string
 	Last_Four_Digit       string
 	Name_On_Card          string
